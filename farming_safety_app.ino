@@ -16,6 +16,9 @@ float tempThreshold = 40;
 double humThreshold = 60;
 unsigned long lastCheck = 0;
 
+bool readingType = true;
+bool buzzerTest = false;
+
 int MQ7sensorValue = 0; 
 
 // Declare peripherals
@@ -46,24 +49,26 @@ int newHumThreshold(String command)
     return 1;
 }
 
-void setup() 
+int toggleReading(String command)
 {
-    dht.begin();
-
-    Particle.variable("temperature", temp);
-    Particle.variable("humidity", hum);
-    Particle.function("readSensor", checkSensorRead);
-    Particle.function("setNewHum", newHumThreshold);
-    
-    pinMode(redLED, OUTPUT);
-    pinMode(yellowLED, OUTPUT);
-    pinMode(greenLED, OUTPUT);
-    pinMode(defaultLED, OUTPUT);
-    pinMode(buzzer, OUTPUT);
-    pinMode(analogMQ7, INPUT);
+    if (command.equals("humidity") || command.equals("temperature"))
+    {
+        readingType = false;
+        return 1;
+    }
+    else if (command.equals("CO"))
+    {
+        readingType = true;
+        return 0;
+    }
+    else
+    {
+        // Unknown option
+        return -1;
+    }
 }
 
-void loop() 
+void tempAndHumRead()
 {
     if (lastCheck + INTERVAL < millis()) 
     {
@@ -104,7 +109,10 @@ void loop()
         digitalWrite(greenLED, LOW);
         delay(1000);
     }
-    
+}
+
+void coRead()
+{
     // LOOP CANNOT BE PARALLELISED - for demonstration purposes, only show one function at a time
     // Gas sensor readings
     analogWrite(analogMQ7, HIGH);   // initial increase heating power
@@ -117,7 +125,7 @@ void loop()
     
     if (MQ7sensorValue <= 200) 
     {
-        Particle.publish("Air-Quality", "CO low");
+        Particle.publish("Air-Quality", "CO perfect");
     }
     else if ((MQ7sensorValue > 200) || (MQ7sensorValue <= 800))
     {
@@ -132,3 +140,62 @@ void loop()
         Particle.publish("ERROR", "Can't read air quality sensor!");
     }
 }
+
+int alarmTest(String command)
+{
+    if (command.equals("on"))
+    {
+        digitalWrite(redLED, HIGH);
+        tone(buzzer, 2093, 650);
+        Particle.publish("ALARM TEST", "Alarm functioning correctly");
+        delay(1000);
+        digitalWrite(redLED, LOW);
+        delay(1000);
+        digitalWrite(redLED, HIGH);
+        tone(buzzer, 2093, 650);
+        delay(1000);
+        digitalWrite(redLED, LOW);
+        delay(1000);
+        digitalWrite(redLED, HIGH);
+        tone(buzzer, 2093, 650);
+        delay(1000);
+        digitalWrite(redLED, LOW);
+        delay(1000);
+        return 1;
+    }
+    else
+    {
+        // Unknown option
+        return -1;
+    }
+}
+
+void setup() 
+{
+    dht.begin();
+
+    Particle.variable("temperature", temp);
+    Particle.variable("humidity", hum);
+    Particle.function("readSensor", checkSensorRead);
+    Particle.function("Set New Humidity Threshold", newHumThreshold);
+    Particle.function("Change Device Reading", toggleReading);
+    Particle.function("Test Device Alarm", alarmTest);
+    
+    pinMode(redLED, OUTPUT);
+    pinMode(yellowLED, OUTPUT);
+    pinMode(greenLED, OUTPUT);
+    pinMode(defaultLED, OUTPUT);
+    pinMode(buzzer, OUTPUT);
+    pinMode(analogMQ7, INPUT);
+}
+
+void loop() 
+{
+    while (readingType)
+    {
+        coRead();
+    }
+    
+    tempAndHumRead();
+}
+
